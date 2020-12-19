@@ -1,0 +1,3 @@
+FROM debian:buster-slim
+ADD build-env/be-target/release/be /opt/be/be
+CMD /opt/be/be

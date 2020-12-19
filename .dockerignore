@@ -1,0 +1,4 @@
+be/target/
+build-env/
+.git/
+!build-env/be-target/release/be

@@ -1,0 +1,4 @@
+set -ex
+docker run -v$(pwd)/build-env/cargo:/opt/build/cargo -v$(pwd)/build-env/be-target:/opt/build/target -v$(pwd)/be:/opt/build/be -eCARGO_HOME=/opt/build/cargo -w/opt/build/be rust cargo build --release --target-dir /opt/build/target
+docker-compose build
+docker-compose up

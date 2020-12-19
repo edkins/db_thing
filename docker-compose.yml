@@ -1,0 +1,25 @@
+version: "3.3"
+services:
+  be:
+    build:
+      context: .
+      dockerfile: be-Dockerfile
+    environment:
+      RUST_BACKTRACE: 1
+    ports:
+      - "8080"
+  postgres:
+    image: postgres
+    ports:
+      - "5432"
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx-Dockerfile
+    volumes:
+      - type: bind
+        source: ./fe
+        target: /usr/share/nginx/html
+        read_only: true
+    ports:
+      - "127.0.0.1:8080:80"
