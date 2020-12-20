@@ -3,6 +3,7 @@ use derive_more::{Display, Error};
 
 #[derive(Debug, Display, Error)]
 pub enum MyError {
+    InvalidAppName,
     NullInSqlToken,
     Postgres(tokio_postgres::error::Error),
 }

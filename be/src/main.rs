@@ -1,6 +1,7 @@
 use actix::clock;
-use actix_web::{get, post, web, App, HttpServer};
+use actix_web::{delete, get, post, web, App, HttpResponse, HttpServer};
 use async_postgres::Socket;
+use serde::Deserialize;
 use serde_json::{map::Map, Value};
 use std::{io::ErrorKind, sync::Arc, time::Duration};
 use tokio_postgres::{tls::NoTlsStream, Client, Config, Connection, Row};
@@ -52,21 +53,105 @@ fn rows_to_json(rows: &[Row]) -> Result<Value, MyError> {
 
 #[get("/api/admin/sys/app")]
 async fn admin_sys_app(data: web::Data<AppState>) -> actix_web::Result<web::Json<Value>, MyError> {
-    let rows = data.client.query("
+    let rows = data
+        .client
+        .query(
+            "
 SELECT schema_name AS app
 FROM information_schema.schemata
-WHERE schema_name <> 'information_schema' AND schema_name <> 'pg_catalog'
-", &[]).await?;
+ORDER BY app ASC
+",
+            &[],
+        )
+        .await?;
     Ok(web::Json(rows_to_json(&rows)?))
 }
 
+#[derive(Deserialize)]
+struct DelAppRequest {
+    app: String,
+}
+
+#[delete("/api/admin/sys/app")]
+async fn admin_sys_app_del(
+    req: web::Query<DelAppRequest>,
+    data: web::Data<AppState>,
+) -> actix_web::Result<HttpResponse, MyError> {
+    if !valid_app_name(&req.app) {
+        return Err(MyError::InvalidAppName);
+    }
+    let sql = format!("DROP SCHEMA {}", identifier(&req.app)?);
+    data.client.query(&sql as &str, &[]).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+#[derive(Deserialize)]
+struct NewAppRequest {
+    data: Vec<NewAppData>,
+}
+#[derive(Deserialize)]
+struct NewAppData {
+    app: String,
+}
+
+fn valid_app_name(name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    if name.starts_with("pg_")
+        || name.starts_with("_")
+        || name == "information_schema"
+        || name == "public"
+        || name == "admin"
+    {
+        return false;
+    }
+    for ch in name.chars() {
+        match ch {
+            '0'..='9' | 'a'..='z' | '_' => {}
+            _ => return false,
+        }
+    }
+    true
+}
+
+#[post("/api/admin/sys/app")]
+async fn admin_sys_app_new(
+    payload: web::Json<NewAppRequest>,
+    data: web::Data<AppState>,
+) -> actix_web::Result<web::Json<Value>, MyError> {
+    for app in &payload.into_inner().data {
+        if !valid_app_name(&app.app) {
+            return Err(MyError::InvalidAppName);
+        }
+        let sql = format!("CREATE SCHEMA {}", identifier(&app.app)?);
+        data.client.query(&sql as &str, &[]).await?;
+    }
+    Ok(web::Json(Value::Object(Map::new())))
+}
+
+#[derive(Deserialize)]
+struct ViewRequest {
+    app: String,
+}
+
 #[get("/api/admin/sys/view")]
-async fn admin_sys_view(data: web::Data<AppState>) -> actix_web::Result<web::Json<Value>, MyError> {
-    let rows = data.client.query("
+async fn admin_sys_view(
+    web::Query(query): web::Query<ViewRequest>,
+    data: web::Data<AppState>,
+) -> actix_web::Result<web::Json<Value>, MyError> {
+    let rows = data
+        .client
+        .query(
+            "
 SELECT table_schema AS app, table_name AS view
 FROM information_schema.views
-WHERE table_schema <> 'information_schema' AND table_schema <> 'pg_catalog'
-", &[]).await?;
+WHERE table_schema = $1
+ORDER BY app ASC, view ASC
+",
+            &[&query.app],
+        )
+        .await?;
     Ok(web::Json(rows_to_json(&rows)?))
 }
 
@@ -137,6 +222,8 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.clone())
             .service(get_view)
             .service(admin_sys_app)
+            .service(admin_sys_app_del)
+            .service(admin_sys_app_new)
             .service(admin_sys_view)
             .service(admin_migration_advance)
             .service(admin_migration_retract)

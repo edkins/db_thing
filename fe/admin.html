@@ -1,0 +1,179 @@
+<html>
+<head>
+<style>
+
+.hidden {
+	display: None;
+}
+.current {
+	background: #fdb;
+}
+
+</style>
+<script>
+"use strict";
+
+function empty(el) {
+	while (el.lastChild) {
+		el.removeChild(el.lastChild);
+	}
+}
+
+function td(text) {
+	const el = document.createElement('td');
+	el.textContent = text;
+	return el;
+}
+
+function td_el(e) {
+	const el = document.createElement('td');
+	el.appendChild(e);
+	return el;
+}
+
+function tr(tds) {
+	const el = document.createElement('tr');
+	for (const td of tds) {
+		el.appendChild(td);
+	}
+	return el;
+}
+
+function div_el(e) {
+	const el = document.createElement('div');
+	el.appendChild(e);
+	return el;
+}
+
+function link(href, text) {
+	const el = document.createElement('a');
+	el.href = href;
+	el.textContent = text;
+	return el;
+}
+
+function lookup_ar(data, keys) {
+	const rows = [];
+	for (const row of data) {
+		let match = true;
+		for (const key in keys) {
+			if (row[key] !== keys[key]) {
+				match = false;
+			}
+		}
+		if (match) {
+			rows.push(row);
+		}
+	}
+	return rows;
+}
+
+async function populate_apps() {
+	const apps = document.getElementById('apps');
+	const urlParams = new URLSearchParams(window.location.search);
+	const app = urlParams.get('app');
+	const response = await fetch('/api/admin/sys/app');
+	empty(apps);
+	if (response.ok) {
+		const d = await response.json();
+		for (let row of d.data) {
+			const href = `/admin.html?app=${row.app}`;
+			const el = div_el(link(href,row.app))
+			if (app !== null && row.app === app) {
+				el.classList.add('current');
+			}
+			apps.appendChild(el);
+		}
+	}
+	apps.appendChild(div_el(link('/admin.html?new=1','New')));
+}
+
+async function populate_new() {
+	const urlParams = new URLSearchParams(window.location.search);
+	const is_new = urlParams.get('new');
+	const panel = document.getElementById('new_panel');
+	if (is_new === null) {
+		panel.classList.add('hidden');
+		return;
+	}
+	panel.classList.remove('hidden');
+}
+
+async function populate_app() {
+	const urlParams = new URLSearchParams(window.location.search);
+	const app_panel = document.getElementById('app_panel');
+	const appname = document.getElementById('appname');
+	const app = urlParams.get('app');
+	if (app === null) {
+		app_panel.classList.add('hidden');
+		return;
+	}
+	app_panel.classList.remove('hidden');
+	appname.textContent = app;
+}
+
+async function load() {
+	await populate_new();
+	await populate_apps();
+	await populate_app();
+}
+
+async function create_app() {
+	const app = document.getElementById('new_app').value;
+	const response = await fetch('/api/admin/sys/app', {
+		method: 'POST',
+		body: JSON.stringify({
+			data: [{app}]
+		}),
+		headers: {
+			'Content-Type': 'application/json'
+		}
+	});
+	if (response.ok) {
+		location.assign(`/admin.html?app=${app}`);
+	}
+}
+
+async function delete_app() {
+	const urlParams = new URLSearchParams(window.location.search);
+	const app = urlParams.get('app');
+	if (app !== null) {
+		const response = await fetch(`/api/admin/sys/app?app=${app}`, {method:'DELETE'});
+		if (response.ok) {
+			location.assign('/admin.html');
+		}
+	}
+}
+
+window.onload = load;
+
+</script>
+</head>
+<body>
+	<table>
+		<tr>
+			<td>
+				<div id="apps">
+				</div>
+			</td>
+			<td>
+				<div id="new_panel">
+					<h1>New app</h1>
+					<div>
+						<input type="text" id="new_app" autocomplete="off">
+					</div>
+					<div>
+						<button onclick="create_app()">Create app</button>
+					</div>
+				</div>
+				<div id="app_panel">
+					<h1 id="appname"></h1>
+					<div>
+						<button onclick="delete_app()">Delete app</button>
+					</div>
+				</div>
+			</td>
+		</tr>
+	</table>
+</body>
+</html>
