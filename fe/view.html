@@ -37,7 +37,7 @@ async function populate_view() {
 	const view = urlParams.get('view');
 	appname.textContent = app;
 	viewname.textContent = view;
-	const response = await fetch(`/api/admin/app/${app}/view/${view}`);
+	const response = await fetch(`/api/${app}/view/${view}`);
 	const head = document.getElementById('head');
 	const body = document.getElementById('body');
 	empty(head);

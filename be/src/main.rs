@@ -50,8 +50,28 @@ fn rows_to_json(rows: &[Row]) -> Result<Value, MyError> {
     Ok(Value::Object(result))
 }
 
-#[get("/api/admin/app/{app}/view/{view}")]
-async fn admin_table(
+#[get("/api/admin/sys/app")]
+async fn admin_sys_app(data: web::Data<AppState>) -> actix_web::Result<web::Json<Value>, MyError> {
+    let rows = data.client.query("
+SELECT schema_name AS app
+FROM information_schema.schemata
+WHERE schema_name <> 'information_schema' AND schema_name <> 'pg_catalog'
+", &[]).await?;
+    Ok(web::Json(rows_to_json(&rows)?))
+}
+
+#[get("/api/admin/sys/view")]
+async fn admin_sys_view(data: web::Data<AppState>) -> actix_web::Result<web::Json<Value>, MyError> {
+    let rows = data.client.query("
+SELECT table_schema AS app, table_name AS view
+FROM information_schema.views
+WHERE table_schema <> 'information_schema' AND table_schema <> 'pg_catalog'
+", &[]).await?;
+    Ok(web::Json(rows_to_json(&rows)?))
+}
+
+#[get("/api/{app}/view/{view}")]
+async fn get_view(
     web::Path((app, view)): web::Path<(String, String)>,
     data: web::Data<AppState>,
 ) -> actix_web::Result<web::Json<Value>, MyError> {
@@ -115,7 +135,9 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(app_state.clone())
-            .service(admin_table)
+            .service(get_view)
+            .service(admin_sys_app)
+            .service(admin_sys_view)
             .service(admin_migration_advance)
             .service(admin_migration_retract)
     })

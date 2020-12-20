@@ -4,8 +4,8 @@ use tokio_postgres::Client;
 
 use crate::errors::MyError;
 
-pub async fn advance(client: &Client) -> actix_web::Result<web::Json<Value>, MyError> {
-    client.query("CREATE SCHEMA admin", &[]).await?;
+pub async fn advance(_client: &Client) -> actix_web::Result<web::Json<Value>, MyError> {
+/*    client.query("CREATE SCHEMA admin", &[]).await?;
     client
         .query(
             "
@@ -34,15 +34,15 @@ GROUP BY view_schema, view_name
 ",
             &[],
         )
-        .await?;
+        .await?;*/
     Ok(web::Json(Value::Object(Map::new())))
 }
 
-pub async fn retract(client: &Client) -> actix_web::Result<web::Json<Value>, MyError> {
-    client.query("DROP VIEW IF EXISTS admin.view", &[]).await?;
+pub async fn retract(_client: &Client) -> actix_web::Result<web::Json<Value>, MyError> {
+    /*client.query("DROP VIEW IF EXISTS admin.view", &[]).await?;
     client
         .query("DROP VIEW IF EXISTS admin.view_table_usage", &[])
         .await?;
-    client.query("DROP SCHEMA IF EXISTS admin", &[]).await?;
+    client.query("DROP SCHEMA IF EXISTS admin", &[]).await?;*/
     Ok(web::Json(Value::Object(Map::new())))
 }

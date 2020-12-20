@@ -53,26 +53,20 @@ function lookup_ar(data, keys) {
 }
 
 async function populate_views() {
-	const response = await fetch('/api/admin/app/admin/view/view');
-	const response2 = await fetch('/api/admin/app/admin/view/view_table_usage');
+	const response = await fetch('/api/admin/sys/view');
 	const views = document.getElementById('views');
 	empty(views);
-	if (response.ok && response2.ok) {
+	if (response.ok) {
 		const d = await response.json();
-		const d2 = await response2.json();
 		for (let row of d.data) {
-			let table_names = '';
-			for (let table_row of lookup_ar(d2.data, {app:row.app, view:row.view})) {
-				table_names += table_row.table + ' ';
-			}
 			const href = `/view.html?app=${row.app}&view=${row.view}`;
-			views.appendChild(tr([td(row.app), td_el(link(href, row.view)), td(table_names)]));
+			views.appendChild(tr([td(row.app), td_el(link(href, row.view))]));
 		}
 	}
 }
 
 async function populate_postgres_views() {
-	const response = await fetch('/api/admin/app/pg_catalog/view/pg_views');
+	const response = await fetch('/api/pg_catalog/view/pg_views');
 	const postgres_views = document.getElementById('postgres_views');
 	empty(postgres_views);
 	if (response.ok) {
@@ -115,7 +109,6 @@ window.onload = load;
 				<tr>
 					<th>App</th>
 					<th>View</th>
-					<th>Tables</th>
 				</tr>
 			</thead>
 			<tbody id="views">
