@@ -67,20 +67,15 @@ ORDER BY app ASC
     Ok(web::Json(rows_to_json(&rows)?))
 }
 
-#[derive(Deserialize)]
-struct DelAppRequest {
-    app: String,
-}
-
 #[delete("/api/admin/sys/app")]
 async fn admin_sys_app_del(
-    req: web::Query<DelAppRequest>,
+    req: web::Query<JustApp>,
     data: web::Data<AppState>,
 ) -> actix_web::Result<HttpResponse, MyError> {
     if !valid_app_name(&req.app) {
         return Err(MyError::InvalidAppName);
     }
-    let sql = format!("DROP SCHEMA {}", identifier(&req.app)?);
+    let sql = format!("DROP SCHEMA {} RESTRICT", identifier(&req.app)?);
     data.client.query(&sql as &str, &[]).await?;
     Ok(HttpResponse::NoContent().finish())
 }
@@ -103,6 +98,23 @@ fn valid_app_name(name: &str) -> bool {
         || name == "information_schema"
         || name == "public"
         || name == "admin"
+    {
+        return false;
+    }
+    for ch in name.chars() {
+        match ch {
+            '0'..='9' | 'a'..='z' | '_' => {}
+            _ => return false,
+        }
+    }
+    true
+}
+
+fn valid_table_name(name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    if name.starts_with("_")
     {
         return false;
     }
@@ -145,7 +157,7 @@ async fn admin_sys_view(
         .query(
             "
 SELECT table_schema AS app, table_name AS table, table_name AS view
-FROM information_schema.tables
+FROM information_schema.views
 WHERE table_schema = $1
 ORDER BY app ASC, view ASC
 ",
@@ -170,7 +182,13 @@ async fn admin_sys_table_new(
     payload: web::Json<NewTableRequest>,
     data: web::Data<AppState>,
 ) -> actix_web::Result<web::Json<Value>, MyError> {
+    if !valid_app_name(&query.app) {
+        return Err(MyError::InvalidAppName);
+    }
     for table in payload.into_inner().data.into_iter() {
+        if !valid_table_name(&table.table) {
+            return Err(MyError::InvalidTableName);
+        }
         let sql = format!(
             "CREATE TABLE {}.{} ()",
             identifier(&query.app)?,
@@ -180,6 +198,55 @@ async fn admin_sys_table_new(
     }
     Ok(web::Json(Value::Object(Map::new())))
 }
+
+#[derive(Deserialize)]
+struct AppAndTable {
+    app: String,
+    table: String,
+}
+
+#[delete("/api/admin/sys/table")]
+async fn admin_sys_table_del(
+    web::Query(query): web::Query<AppAndTable>,
+    data: web::Data<AppState>,
+) -> actix_web::Result<HttpResponse, MyError> {
+    if !valid_app_name(&query.app) {
+        return Err(MyError::InvalidAppName);
+    }
+    if !valid_table_name(&query.table) {
+        return Err(MyError::InvalidTableName);
+    }
+    let sql = format!("DROP TABLE {}.{} RESTRICT", identifier(&query.app)?, identifier(&query.table)?);
+    data.client.query(&sql as &str, &[]).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+#[get("/api/admin/sys/table")]
+async fn admin_sys_table(
+    web::Query(query): web::Query<JustApp>,
+    data: web::Data<AppState>,
+) -> actix_web::Result<web::Json<Value>, MyError> {
+    if !valid_app_name(&query.app) {
+        return Err(MyError::InvalidAppName);
+    }
+    let rows = data
+        .client
+        .query(
+            "
+SELECT information_schema.tables.table_schema AS app, information_schema.tables.table_name AS \"table\", COUNT(view_table_usage.view_name) AS view_count
+FROM information_schema.tables
+LEFT OUTER JOIN information_schema.view_table_usage ON information_schema.view_table_usage.table_name = information_schema.tables.table_name
+WHERE information_schema.tables.table_type = 'BASE TABLE'
+AND information_schema.tables.table_schema = $1
+GROUP BY information_schema.tables.table_schema, information_schema.tables.table_name
+ORDER BY app ASC, \"table\" ASC
+",
+            &[&query.app],
+        )
+        .await?;
+    Ok(web::Json(rows_to_json(&rows)?))
+}
+
 
 #[get("/api/{app}/view/{view}")]
 async fn get_view(
@@ -251,6 +318,8 @@ async fn main() -> std::io::Result<()> {
             .service(admin_sys_app_del)
             .service(admin_sys_app_new)
             .service(admin_sys_view)
+            .service(admin_sys_table)
+            .service(admin_sys_table_del)
             .service(admin_sys_table_new)
             .service(admin_migration_advance)
             .service(admin_migration_retract)

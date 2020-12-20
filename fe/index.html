@@ -164,9 +164,11 @@ async function populate_app() {
 
 	const tables = document.getElementById('tables');
 	const response = await fetch(`/api/admin/sys/view?app=${app}`);
+	const response2 = await fetch(`/api/admin/sys/table?app=${app}`);
 	empty(tables);
-	if (response.ok) {
+	if (response.ok && response2.ok) {
 		const d = await response.json();
+		const d2 = await response2.json();
 		let table = undefined;
 		let t = undefined;
 		for (let row of d.data) {
@@ -182,6 +184,26 @@ async function populate_app() {
 		}
 		if (t !== undefined) {
 			tables.appendChild(t);
+		}
+
+		let any = false;
+		for (let row of d2.data) {
+			if (row.view_count === 0) {
+				if (!any) {
+					tables.appendChild(document.createElement('hr'));
+					any = true;
+				}
+				tables.appendChild(h2(row.table));
+				const btn = document.createElement('button');
+				btn.textContent = 'Delete orphaned data';
+				btn.onclick = async() => {
+					const response = await fetch(`/api/admin/sys/table?app=${app}&table=${row.table}`, {method:'DELETE'});
+					if (response.ok) {
+						load();
+					}
+				};
+				tables.appendChild(div_el(btn));
+			}
 		}
 	}
 }
@@ -239,6 +261,7 @@ window.onhashchange = load;
 		<h1>Views</h1>
 		<div id="tables">
 		</div>
+		<hr>
 		<button onclick="create_table()">Create table</button>
 		<input type="text" id="new_tablename" autocomplete="off">
 		<hr>
