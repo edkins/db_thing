@@ -15,6 +15,12 @@ function td(text) {
 	return el;
 }
 
+function td_el(e) {
+	const el = document.createElement('td');
+	el.appendChild(e);
+	return el;
+}
+
 function tr(tds) {
 	const el = document.createElement('tr');
 	for (const td of tds) {
@@ -23,20 +29,64 @@ function tr(tds) {
 	return el;
 }
 
+function link(href, text) {
+	const el = document.createElement('a');
+	el.href = href;
+	el.textContent = text;
+	return el;
+}
+
+function lookup_ar(data, keys) {
+	const rows = [];
+	for (const row of data) {
+		let match = true;
+		for (const key in keys) {
+			if (row[key] !== keys[key]) {
+				match = false;
+			}
+		}
+		if (match) {
+			rows.push(row);
+		}
+	}
+	return rows;
+}
+
 async function populate_views() {
 	const response = await fetch('/api/admin/app/admin/view/view');
+	const response2 = await fetch('/api/admin/app/admin/view/view_table_usage');
+	const views = document.getElementById('views');
 	empty(views);
-	if (response.ok) {
+	if (response.ok && response2.ok) {
 		const d = await response.json();
-		const views = document.getElementById('views');
+		const d2 = await response2.json();
 		for (let row of d.data) {
-			views.appendChild(tr([td(row.app), td(row.view)]));
+			let table_names = '';
+			for (let table_row of lookup_ar(d2.data, {app:row.app, view:row.view})) {
+				table_names += table_row.table + ' ';
+			}
+			const href = `/view.html?app=${row.app}&view=${row.view}`;
+			views.appendChild(tr([td(row.app), td_el(link(href, row.view)), td(table_names)]));
 		}
 	}
 }
 
-function load() {
-	populate_views();
+async function populate_postgres_views() {
+	const response = await fetch('/api/admin/app/pg_catalog/view/pg_views');
+	const postgres_views = document.getElementById('postgres_views');
+	empty(postgres_views);
+	if (response.ok) {
+		const d = await response.json();
+		for (let row of d.data) {
+			const href = `/view.html?app=${row.schemaname}&view=${row.viewname}`;
+			postgres_views.appendChild(tr([td(row.schemaname), td_el(link(href, row.viewname))]));
+		}
+	}
+}
+
+async function load() {
+	await populate_views();
+	await populate_postgres_views();
 }
 
 async function advance_migration() {
@@ -65,9 +115,23 @@ window.onload = load;
 				<tr>
 					<th>App</th>
 					<th>View</th>
+					<th>Tables</th>
 				</tr>
 			</thead>
 			<tbody id="views">
+			</tbody>
+		</table>
+	</div>
+	<div>
+		<h1>Postgres views</h1>
+		<table>
+			<thead>
+				<tr>
+					<th>Schema</th>
+					<th>View</th>
+				</tr>
+			</thead>
+			<tbody id="postgres_views">
 			</tbody>
 		</table>
 	</div>

@@ -1,9 +1,9 @@
 use actix::clock;
 use actix_web::{get, post, web, App, HttpServer};
+use async_postgres::Socket;
 use serde_json::{map::Map, Value};
 use std::{io::ErrorKind, sync::Arc, time::Duration};
-use async_postgres::Socket;
-use tokio_postgres::{Client, Config, Connection, Row, tls::NoTlsStream};
+use tokio_postgres::{tls::NoTlsStream, Client, Config, Connection, Row};
 
 use crate::errors::MyError;
 use crate::sql_to_json::SqlJson;
@@ -37,14 +37,14 @@ fn row_to_json(row: &Row) -> Result<Value, MyError> {
     let mut map = Map::new();
     for column in row.columns() {
         let name = column.name();
-        let value:SqlJson = row.try_get(name)?;
+        let value: SqlJson = row.try_get(name)?;
         map.insert(name.to_owned(), value.0);
     }
     Ok(Value::Object(map))
 }
 
 fn rows_to_json(rows: &[Row]) -> Result<Value, MyError> {
-    let jsons:Result<Vec<_>,MyError> = rows.into_iter().map(row_to_json).collect();
+    let jsons: Result<Vec<_>, MyError> = rows.into_iter().map(row_to_json).collect();
     let mut result = Map::new();
     result.insert("data".to_owned(), Value::Array(jsons?));
     Ok(Value::Object(result))
@@ -52,7 +52,7 @@ fn rows_to_json(rows: &[Row]) -> Result<Value, MyError> {
 
 #[get("/api/admin/app/{app}/view/{view}")]
 async fn admin_table(
-    web::Path((app, view)): web::Path<(String,String)>,
+    web::Path((app, view)): web::Path<(String, String)>,
     data: web::Data<AppState>,
 ) -> actix_web::Result<web::Json<Value>, MyError> {
     let sql = format!("SELECT * FROM {}.{}", identifier(&app)?, identifier(&view)?);
@@ -60,7 +60,7 @@ async fn admin_table(
     Ok(web::Json(rows_to_json(&rows)?))
 }
 
-async fn connect() -> std::io::Result<(Client, Connection<Socket,NoTlsStream>)> {
+async fn connect() -> std::io::Result<(Client, Connection<Socket, NoTlsStream>)> {
     let max_duration = Duration::from_secs(30);
     let mut duration = Duration::from_millis(10);
     loop {
@@ -82,12 +82,16 @@ async fn connect() -> std::io::Result<(Client, Connection<Socket,NoTlsStream>)> 
 }
 
 #[post("/api/admin/migration/advance")]
-async fn admin_migration_advance(data: web::Data<AppState>) -> actix_web::Result<web::Json<Value>, MyError> {
+async fn admin_migration_advance(
+    data: web::Data<AppState>,
+) -> actix_web::Result<web::Json<Value>, MyError> {
     migration::advance(&*data.client).await
 }
 
 #[post("/api/admin/migration/retract")]
-async fn admin_migration_retract(data: web::Data<AppState>) -> actix_web::Result<web::Json<Value>, MyError> {
+async fn admin_migration_retract(
+    data: web::Data<AppState>,
+) -> actix_web::Result<web::Json<Value>, MyError> {
     migration::retract(&*data.client).await
 }
 
@@ -108,8 +112,14 @@ async fn main() -> std::io::Result<()> {
     });
 
     println!("Creating server");
-    HttpServer::new(move || App::new().app_data(app_state.clone()).service(admin_table).service(admin_migration_advance).service(admin_migration_retract))
-        .bind("0.0.0.0:8080")?
-        .run()
-        .await
+    HttpServer::new(move || {
+        App::new()
+            .app_data(app_state.clone())
+            .service(admin_table)
+            .service(admin_migration_advance)
+            .service(admin_migration_retract)
+    })
+    .bind("0.0.0.0:8080")?
+    .run()
+    .await
 }

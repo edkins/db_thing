@@ -1,0 +1,98 @@
+<html>
+<head>
+<script>
+'use strict';
+
+function empty(el) {
+	while (el.lastChild) {
+		el.removeChild(el.lastChild);
+	}
+}
+
+function td(text) {
+	const el = document.createElement('td');
+	el.textContent = text;
+	return el;
+}
+
+function th(text) {
+	const el = document.createElement('th');
+	el.textContent = text;
+	return el;
+}
+
+function tr(tds) {
+	const el = document.createElement('tr');
+	for (const td of tds) {
+		el.appendChild(td);
+	}
+	return el;
+}
+
+async function populate_view() {
+	const urlParams = new URLSearchParams(window.location.search);
+	const appname = document.getElementById('appname');
+	const viewname = document.getElementById('viewname');
+	const app = urlParams.get('app');
+	const view = urlParams.get('view');
+	appname.textContent = app;
+	viewname.textContent = view;
+	const response = await fetch(`/api/admin/app/${app}/view/${view}`);
+	const head = document.getElementById('head');
+	const body = document.getElementById('body');
+	empty(head);
+	empty(body);
+	let columns = undefined;
+	if (response.ok) {
+		const d = await response.json();
+		for (let row of d.data) {
+			if (columns === undefined) {
+				columns = Object.keys(row);
+				const head_ar = [];
+				for (let column of columns) {
+					head_ar.push(th(column));
+				}
+				head.appendChild(tr(head_ar));
+			}
+			const ar = [];
+			for (let column of columns) {
+				ar.push(td(row[column]));
+			}
+			body.appendChild(tr(ar));
+		}
+	}
+}
+
+async function populate_postgres_views() {
+	const response = await fetch('/api/admin/app/pg_catalog/view/pg_views');
+	const postgres_views = document.getElementById('postgres_views');
+	empty(postgres_views);
+	if (response.ok) {
+		const d = await response.json();
+		for (let row of d.data) {
+			postgres_views.appendChild(tr([td(row.schemaname), td(row.viewname)]));
+		}
+	}
+}
+
+async function load() {
+	await populate_view();
+}
+
+window.onload = load;
+
+</script>
+</head>
+<body>
+	<div>
+		<h1>View <span id="viewname"></span> (app: <span id="appname"></span>)</h1>
+		<table>
+			<thead id="head">
+			</thead>
+			<tbody id="body">
+			</tbody>
+		</table>
+	</div>
+</body>
+</html>
+
