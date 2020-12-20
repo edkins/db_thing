@@ -40,6 +40,12 @@ function td_el(e) {
 	return el;
 }
 
+function th_el(e) {
+	const el = document.createElement('th');
+	el.appendChild(e);
+	return el;
+}
+
 function div_el(e) {
 	const el = document.createElement('div');
 	el.appendChild(e);
@@ -195,31 +201,29 @@ async function populate_app() {
 			}
 		}
 		for (let table_list of all_tables) {
-			tables.appendChild(h2(table_list));
+			tables.appendChild(h2(`${table_list}: ${table_info[table_list].view_count} views`));
 
 			const t = document.createElement('table');
 			t.border = 1;
-			let orphaned = true;
 
 			const ths = [];
 			ths.push(th(`Views: ${table_info[table_list].view_count}`));
 			for (let column of table_info[table_list].columns) {
 				ths.push(th(column));
 			}
+			const inp = document.createElement('input');
+			inp.type = 'text';
+			inp.id = `add_column_name_${table_list}`;
+			ths.push(th_el(inp));  // add column name
+			ths.push(th(''));  // add column
 			ths.push(th(''));  // delete view
 			t.appendChild(tr(ths));
 
-			for (let row of d.data) {
+			for (let i = 0; i < d.data.length; i++) {
+				const row = d.data[i];
+				const first = (i == 0);
+				const last = (i == d.data.length - 1);
 				if (row.table_list === table_list) {
-					orphaned = false;
-					const delbtn = document.createElement('button');
-					delbtn.textContent = 'del';
-					delbtn.onclick = async() => {
-						const response = await fetch(`/api/admin/sys/view?app=${app}&view=${row.view}`, {method:'DELETE'});
-						if (response.ok) {
-							load();
-						}
-					};
 					const tds = [];
 					tds.push(td(row.view));
 					for (let column of table_info[table_list].columns) {
@@ -231,7 +235,53 @@ async function populate_app() {
 							tds.push(td(data_type));
 						}
 					}
-					tds.push(td_el(delbtn));
+
+					if (first) {
+						const inp = document.createElement('input');
+						inp.type = 'text';
+						inp.id = `add_column_data_type_${row.view}`;
+
+						const addbtn = document.createElement('button');
+						addbtn.textContent = 'Add';
+						addbtn.onclick = async() => {
+							const column = document.getElementById(`add_column_name_${table_list}`).value;
+							const data_type = document.getElementById(`add_column_data_type_${row.view}`).value;
+							const response = await fetch(`/api/admin/sys/view?app=${app}&view=${row.view}`,
+								{
+									method: 'PATCH',
+									headers: {'Content-Type':'application/json'},
+									body: JSON.stringify({data:{
+										add_columns: [{
+											column,
+											data_type
+										}]
+									}})
+								}
+							);
+							if (response.ok) {
+								load();
+							}
+						}
+						tds.push(td_el(inp));
+						tds.push(td_el(addbtn));
+					} else {
+						tds.push(td(''));
+						tds.push(td(''));
+					}
+
+					if (last) {
+						const delbtn = document.createElement('button');
+						delbtn.textContent = 'Delete view';
+						delbtn.onclick = async() => {
+							const response = await fetch(`/api/admin/sys/view?app=${app}&view=${row.view}`, {method:'DELETE'});
+							if (response.ok) {
+								load();
+							}
+						};
+						tds.push(td_el(delbtn));
+					} else {
+						tds.push(td(''));
+					}
 					t.appendChild(tr(tds));
 				}
 			}

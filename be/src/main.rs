@@ -201,7 +201,10 @@ WITH a AS (
         information_schema.columns.table_schema AS app,
         information_schema.columns.table_name AS view,
         information_schema.columns.column_name AS column,
-        information_schema.columns.data_type AS data_type
+        CASE information_schema.columns.data_type
+            WHEN 'character varying' THEN 'string'
+            ELSE 'unknown'
+        END AS data_type
     FROM information_schema.columns
     WHERE information_schema.columns.table_schema = $1
     ORDER BY table_name ASC, ordinal_position ASC
