@@ -185,16 +185,33 @@ async fn admin_sys_view(
         .client
         .query(
             "
-SELECT
-    information_schema.views.table_schema AS app,
-    information_schema.views.table_name AS view,
-    ARRAY_AGG(information_schema.view_table_usage.table_name :: VARCHAR) AS tables
-FROM information_schema.views
-LEFT OUTER JOIN information_schema.view_table_usage
-    ON information_schema.views.table_name = information_schema.view_table_usage.view_name
-WHERE information_schema.views.table_schema = $1
-GROUP BY information_schema.views.table_schema, information_schema.views.table_name
-ORDER BY app ASC, tables ASC, view ASC
+WITH a AS (
+    SELECT
+        information_schema.views.table_schema AS app,
+        information_schema.views.table_name AS view,
+        ARRAY_AGG(information_schema.view_table_usage.table_name :: VARCHAR) AS tables
+    FROM information_schema.views
+    LEFT OUTER JOIN information_schema.view_table_usage
+        ON information_schema.views.table_name = information_schema.view_table_usage.view_name
+    WHERE information_schema.views.table_schema = $1
+    GROUP BY information_schema.views.table_schema, information_schema.views.table_name
+    ORDER BY app ASC, tables ASC, view ASC
+), b AS (
+    SELECT
+        information_schema.columns.table_schema AS app,
+        information_schema.columns.table_name AS view,
+        information_schema.columns.column_name AS column,
+        information_schema.columns.data_type AS data_type
+    FROM information_schema.columns
+    WHERE information_schema.columns.table_schema = $1
+    ORDER BY table_name ASC, ordinal_position ASC
+)
+SELECT a.app, a.view, a.tables, ARRAY_AGG(b.column::VARCHAR) AS columns, ARRAY_AGG(b.data_type::VARCHAR) AS data_types
+FROM a
+LEFT OUTER JOIN b
+    ON a.app = b.app AND a.view = b.view
+GROUP BY a.app, a.view, a.tables
+ORDER BY app ASC, tables ASC, view DESC
 ",
             &[&query.app],
         )

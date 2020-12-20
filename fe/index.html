@@ -28,6 +28,12 @@ function td(text) {
 	return el;
 }
 
+function th(text) {
+	const el = document.createElement('th');
+	el.textContent = text;
+	return el;
+}
+
 function td_el(e) {
 	const el = document.createElement('td');
 	el.appendChild(e);
@@ -170,44 +176,72 @@ async function populate_app() {
 	if (response.ok && response2.ok) {
 		const d = await response.json();
 		const d2 = await response2.json();
-		let table = undefined;
-		let t = undefined;
-		for (let row of d.data) {
-			const table_list = row.tables.join(',');
-			if (table_list !== table) {
-				if (t !== undefined) {
-					tables.appendChild(t);
-				}
-				t = document.createElement('table');
-				t.border = 1;
-				tables.appendChild(h2(table_list));
-			}
-			const delbtn = document.createElement('button');
-			delbtn.textContent = 'del';
-			delbtn.onclick = async() => {
-				const response = await fetch(`/api/admin/sys/view?app=${app}&view=${row.view}`, {method:'DELETE'});
-				if (response.ok) {
-					load();
-				}
-			};
-			t.appendChild(tr([td(row.view),td_el(delbtn)]))
-		}
-		if (t !== undefined) {
-			tables.appendChild(t);
-		}
-
-		let any = false;
+		const all_tables = [];
+		const table_info = {};
 		for (let row of d2.data) {
-			if (row.view_count === 0) {
-				if (!any) {
-					tables.appendChild(document.createElement('hr'));
-					any = true;
+			all_tables.push(row.table);
+			table_info[row.table] = {view_count: row.view_count, columns: []};
+		}
+		for (let row of d.data) {
+			row.table_list = row.tables.join(',');
+			if (all_tables.indexOf(row.table_list) === -1) {
+				all_tables.push(row.table_list);
+				table_info[row.table] = {view_count: '?', columns: []};
+			}
+			for (let column of row.columns) {
+				if (table_info[row.table_list].columns.indexOf(column) === -1) {
+					table_info[row.table_list].columns.push(column);
 				}
-				tables.appendChild(h2(row.table));
+			}
+		}
+		for (let table_list of all_tables) {
+			tables.appendChild(h2(table_list));
+
+			const t = document.createElement('table');
+			t.border = 1;
+			let orphaned = true;
+
+			const ths = [];
+			ths.push(th(`Views: ${table_info[table_list].view_count}`));
+			for (let column of table_info[table_list].columns) {
+				ths.push(th(column));
+			}
+			ths.push(th(''));  // delete view
+			t.appendChild(tr(ths));
+
+			for (let row of d.data) {
+				if (row.table_list === table_list) {
+					orphaned = false;
+					const delbtn = document.createElement('button');
+					delbtn.textContent = 'del';
+					delbtn.onclick = async() => {
+						const response = await fetch(`/api/admin/sys/view?app=${app}&view=${row.view}`, {method:'DELETE'});
+						if (response.ok) {
+							load();
+						}
+					};
+					const tds = [];
+					tds.push(td(row.view));
+					for (let column of table_info[table_list].columns) {
+						const index = row.columns.indexOf(column);
+						if (index === -1) {
+							tds.push(td('-'));
+						} else {
+							const data_type = row.data_types[index];
+							tds.push(td(data_type));
+						}
+					}
+					tds.push(td_el(delbtn));
+					t.appendChild(tr(tds));
+				}
+			}
+
+			tables.appendChild(t);
+			if (table_info[table_list].view_count === 0) {
 				const btn = document.createElement('button');
 				btn.textContent = 'Delete orphaned data';
 				btn.onclick = async() => {
-					const response = await fetch(`/api/admin/sys/table?app=${app}&table=${row.table}`, {method:'DELETE'});
+					const response = await fetch(`/api/admin/sys/table?app=${app}&table=${table_list}`, {method:'DELETE'});
 					if (response.ok) {
 						load();
 					}
