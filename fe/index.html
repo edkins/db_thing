@@ -1,5 +1,75 @@
 <html>
+<head>
+<script>
+'use strict';
+
+function empty(el) {
+	while (el.lastChild) {
+		el.removeChild(el.lastChild);
+	}
+}
+
+function td(text) {
+	const el = document.createElement('td');
+	el.textContent = text;
+	return el;
+}
+
+function tr(tds) {
+	const el = document.createElement('tr');
+	for (const td of tds) {
+		el.appendChild(td);
+	}
+	return el;
+}
+
+async function populate_views() {
+	const response = await fetch('/api/admin/app/admin/view/view');
+	empty(views);
+	if (response.ok) {
+		const d = await response.json();
+		const views = document.getElementById('views');
+		for (let row of d.data) {
+			views.appendChild(tr([td(row.app), td(row.view)]));
+		}
+	}
+}
+
+function load() {
+	populate_views();
+}
+
+async function advance_migration() {
+	await fetch('/api/admin/migration/advance', {method:'POST'});
+	load();
+}
+
+async function retract_migration() {
+	await fetch('/api/admin/migration/retract', {method:'POST'});
+	load();
+}
+
+window.onload = load;
+
+</script>
+</head>
 <body>
-The index page.
+	<div>
+	<button onclick="advance_migration()">Advance</button>
+	<button onclick="retract_migration()">Retract</button>
+	</div>
+	<div>
+		<h1>Views</h1>
+		<table>
+			<thead>
+				<tr>
+					<th>App</th>
+					<th>View</th>
+				</tr>
+			</thead>
+			<tbody id="views">
+			</tbody>
+		</table>
+	</div>
 </body>
 </html>

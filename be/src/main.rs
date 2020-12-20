@@ -1,5 +1,5 @@
 use actix::clock;
-use actix_web::{get, web, App, HttpServer};
+use actix_web::{get, post, web, App, HttpServer};
 use serde_json::{map::Map, Value};
 use std::{io::ErrorKind, sync::Arc, time::Duration};
 use async_postgres::Socket;
@@ -9,6 +9,7 @@ use crate::errors::MyError;
 use crate::sql_to_json::SqlJson;
 
 mod errors;
+mod migration;
 mod sql_to_json;
 
 #[derive(Clone)]
@@ -49,12 +50,12 @@ fn rows_to_json(rows: &[Row]) -> Result<Value, MyError> {
     Ok(Value::Object(result))
 }
 
-#[get("/api/admin/view/{view}")]
+#[get("/api/admin/app/{app}/view/{view}")]
 async fn admin_table(
-    web::Path(view): web::Path<String>,
+    web::Path((app, view)): web::Path<(String,String)>,
     data: web::Data<AppState>,
 ) -> actix_web::Result<web::Json<Value>, MyError> {
-    let sql = format!("SELECT * FROM {}", identifier(&view)?);
+    let sql = format!("SELECT * FROM {}.{}", identifier(&app)?, identifier(&view)?);
     let rows = data.client.query(&sql as &str, &[]).await?;
     Ok(web::Json(rows_to_json(&rows)?))
 }
@@ -80,6 +81,16 @@ async fn connect() -> std::io::Result<(Client, Connection<Socket,NoTlsStream>)> 
     }
 }
 
+#[post("/api/admin/migration/advance")]
+async fn admin_migration_advance(data: web::Data<AppState>) -> actix_web::Result<web::Json<Value>, MyError> {
+    migration::advance(&*data.client).await
+}
+
+#[post("/api/admin/migration/retract")]
+async fn admin_migration_retract(data: web::Data<AppState>) -> actix_web::Result<web::Json<Value>, MyError> {
+    migration::retract(&*data.client).await
+}
+
 async fn do_connection(connection: Connection<Socket, NoTlsStream>) {
     let _ = connection.await;
 }
@@ -97,7 +108,7 @@ async fn main() -> std::io::Result<()> {
     });
 
     println!("Creating server");
-    HttpServer::new(move || App::new().app_data(app_state.clone()).service(admin_table))
+    HttpServer::new(move || App::new().app_data(app_state.clone()).service(admin_table).service(admin_migration_advance).service(admin_migration_retract))
         .bind("0.0.0.0:8080")?
         .run()
         .await
