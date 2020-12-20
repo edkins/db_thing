@@ -72,6 +72,7 @@ async function populate_apps() {
 	const apps = document.getElementById('apps');
 	const urlParams = new URLSearchParams(window.location.search);
 	const app = urlParams.get('app');
+	const is_new = urlParams.get('new');
 	const response = await fetch('/api/admin/sys/app');
 	empty(apps);
 	if (response.ok) {
@@ -85,7 +86,12 @@ async function populate_apps() {
 			apps.appendChild(el);
 		}
 	}
-	apps.appendChild(div_el(link('/admin.html?new=1','New')));
+	apps.appendChild(document.createElement('hr'));
+	const el = div_el(link('/admin.html?new=1','New'));
+	if (is_new !== null) {
+		el.classList.add('current');
+	}
+	apps.appendChild(el);
 }
 
 async function populate_new() {

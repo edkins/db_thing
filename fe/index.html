@@ -1,5 +1,12 @@
 <html>
 <head>
+<style>
+
+.hidden {
+	display: None;
+}
+
+</style>
 <script>
 "use strict";
 
@@ -21,6 +28,12 @@ function td_el(e) {
 	return el;
 }
 
+function div_el(e) {
+	const el = document.createElement('div');
+	el.appendChild(e);
+	return el;
+}
+
 function tr(tds) {
 	const el = document.createElement('tr');
 	for (const td of tds) {
@@ -32,6 +45,15 @@ function tr(tds) {
 function link(href, text) {
 	const el = document.createElement('a');
 	el.href = href;
+	el.textContent = text;
+	return el;
+}
+
+function button(fragment, text) {
+	const el = document.createElement('button');
+	el.onclick = () => {
+		window.location.hash = `#${fragment}`;
+	};
 	el.textContent = text;
 	return el;
 }
@@ -52,81 +74,125 @@ function lookup_ar(data, keys) {
 	return rows;
 }
 
-async function populate_views() {
-	const response = await fetch('/api/admin/sys/view');
-	const views = document.getElementById('views');
-	empty(views);
+function parse_hash() {
+	if (window.location.hash === '') {
+		return { home: true };
+	} else if (window.location.hash === '#new') {
+		return { newapp: true };
+	} else {
+		return { app: window.location.hash.substr(1), app_home: true };
+	}
+}
+
+async function populate_apps() {
+	const app_div = document.getElementById('apps_div');
+	if (!parse_hash().home) {
+		app_div.classList.add('hidden');
+		return;
+	}
+	app_div.classList.remove('hidden');
+
+	const apps = document.getElementById('apps');
+	const response = await fetch('/api/admin/sys/app');
+	empty(apps);
 	if (response.ok) {
 		const d = await response.json();
 		for (let row of d.data) {
-			const href = `/view.html?app=${row.app}&view=${row.view}`;
-			views.appendChild(tr([td(row.app), td_el(link(href, row.view))]));
+			const el = div_el(link(`#${row.app}`,row.app))
+			apps.appendChild(el);
 		}
 	}
 }
 
-async function populate_postgres_views() {
-	const response = await fetch('/api/pg_catalog/view/pg_views');
-	const postgres_views = document.getElementById('postgres_views');
-	empty(postgres_views);
+async function populate_new() {
+	const new_div = document.getElementById('new_div');
+	const new_crumb = document.getElementById('new_crumb');
+	if (!parse_hash().newapp) {
+		new_div.classList.add('hidden');
+		new_crumb.classList.add('hidden');
+		return;
+	}
+	new_div.classList.remove('hidden');
+	new_crumb.classList.remove('hidden');
+}
+
+async function create_app() {
+	const app = document.getElementById('new_appname').value;
+	const response = await fetch('/api/admin/sys/app', {
+		method: 'POST',
+		headers: {'Content-Type': 'application/json'},
+		body: JSON.stringify({data: [{app}]})
+	});
 	if (response.ok) {
-		const d = await response.json();
-		for (let row of d.data) {
-			const href = `/view.html?app=${row.schemaname}&view=${row.viewname}`;
-			postgres_views.appendChild(tr([td(row.schemaname), td_el(link(href, row.viewname))]));
+		window.location.hash = `#${app}`;
+	}
+}
+
+async function populate_app() {
+	const app_div = document.getElementById('app_div');
+	const app_crumb = document.getElementById('app_crumb');
+	if (!parse_hash().app_home) {
+		app_div.classList.add('hidden');
+		app_crumb.classList.add('hidden');
+		return;
+	}
+	app_div.classList.remove('hidden');
+	app_crumb.classList.remove('hidden');
+	const app = parse_hash().app;
+	app_crumb.textContent = app;
+}
+
+async function delete_app() {
+	const app = parse_hash().app;
+	if (app !== undefined) {
+		const response = await fetch(`/api/admin/sys/app?app=${app}`, {method:'DELETE'});
+		if (response.ok) {
+			window.location.hash = '#';
 		}
 	}
 }
 
 async function load() {
-	await populate_views();
-	await populate_postgres_views();
-}
-
-async function advance_migration() {
-	await fetch('/api/admin/migration/advance', {method:'POST'});
-	load();
-}
-
-async function retract_migration() {
-	await fetch('/api/admin/migration/retract', {method:'POST'});
-	load();
+	await populate_new();
+	await populate_app();
+	await populate_apps();
 }
 
 window.onload = load;
+window.onhashchange = load;
 
 </script>
 </head>
 <body>
 	<div>
-	<button onclick="advance_migration()">Advance</button>
-	<button onclick="retract_migration()">Retract</button>
+		<a href="#">Apps</a>
+		&gt;
+		<span id="new_crumb">
+			New app
+		</span>
+		<span id="app_crumb">
+		</span>
 	</div>
-	<div>
-		<h1>Views</h1>
-		<table>
-			<thead>
-				<tr>
-					<th>App</th>
-					<th>View</th>
-				</tr>
-			</thead>
-			<tbody id="views">
-			</tbody>
-		</table>
+	<hr>
+	<div id="apps_div">
+		<div id="apps">
+		</div>
+		<br>
+		<div id="new_app">
+			<a href="#new">New app</a>
+		</div>
 	</div>
-	<div>
-		<h1>Postgres views</h1>
-		<table>
-			<thead>
-				<tr>
-					<th>Schema</th>
-					<th>View</th>
-				</tr>
-			</thead>
-			<tbody id="postgres_views">
-			</tbody>
-		</table>
+	<div id="new_div">
+		<div>
+			<input type="text" id="new_appname" autocomplete="off">
+		</div>
+		<div>
+			<button onclick="create_app()">Create app</button>
+		</div>
+		
+	</div>
+	<div id="app_div">
+		<button onclick="delete_app()">Delete app</button>
 	</div>
 </body>
 </html>
