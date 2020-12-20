@@ -16,6 +16,12 @@ function empty(el) {
 	}
 }
 
+function h2(text) {
+	const el = document.createElement('h2');
+	el.textContent = text;
+	return el;
+}
+
 function td(text) {
 	const el = document.createElement('td');
 	el.textContent = text;
@@ -116,6 +122,21 @@ async function populate_new() {
 	new_crumb.classList.remove('hidden');
 }
 
+async function create_table() {
+	const app = parse_hash().app;
+	const table = document.getElementById('new_tablename').value;
+	if (app !== undefined && table !== '') {
+		const response = await fetch(`/api/admin/sys/table?app=${app}`, {
+			method: 'POST',
+			headers: {'Content-Type': 'application/json'},
+			body: JSON.stringify({data: [{table}]})
+		});
+		if (response.ok) {
+			load();
+		}
+	}
+}
+
 async function create_app() {
 	const app = document.getElementById('new_appname').value;
 	const response = await fetch('/api/admin/sys/app', {
@@ -140,6 +161,29 @@ async function populate_app() {
 	app_crumb.classList.remove('hidden');
 	const app = parse_hash().app;
 	app_crumb.textContent = app;
+
+	const tables = document.getElementById('tables');
+	const response = await fetch(`/api/admin/sys/view?app=${app}`);
+	empty(tables);
+	if (response.ok) {
+		const d = await response.json();
+		let table = undefined;
+		let t = undefined;
+		for (let row of d.data) {
+			if (row.table !== table) {
+				if (t !== undefined) {
+					tables.appendChild(t);
+				}
+				t = document.createElement('table');
+				t.border = 1;
+				tables.appendChild(h2(row.table));
+			}
+			t.appendChild(tr([td(row.view)]))
+		}
+		if (t !== undefined) {
+			tables.appendChild(t);
+		}
+	}
 }
 
 async function delete_app() {
@@ -192,6 +236,12 @@ window.onhashchange = load;
 		
 	</div>
 	<div id="app_div">
+		<h1>Views</h1>
+		<div id="tables">
+		</div>
+		<button onclick="create_table()">Create table</button>
+		<input type="text" id="new_tablename" autocomplete="off">
+		<hr>
 		<button onclick="delete_app()">Delete app</button>
 	</div>
 </body>

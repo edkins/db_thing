@@ -131,21 +131,21 @@ async fn admin_sys_app_new(
 }
 
 #[derive(Deserialize)]
-struct ViewRequest {
+struct JustApp {
     app: String,
 }
 
 #[get("/api/admin/sys/view")]
 async fn admin_sys_view(
-    web::Query(query): web::Query<ViewRequest>,
+    web::Query(query): web::Query<JustApp>,
     data: web::Data<AppState>,
 ) -> actix_web::Result<web::Json<Value>, MyError> {
     let rows = data
         .client
         .query(
             "
-SELECT table_schema AS app, table_name AS view
-FROM information_schema.views
+SELECT table_schema AS app, table_name AS table, table_name AS view
+FROM information_schema.tables
 WHERE table_schema = $1
 ORDER BY app ASC, view ASC
 ",
@@ -153,6 +153,32 @@ ORDER BY app ASC, view ASC
         )
         .await?;
     Ok(web::Json(rows_to_json(&rows)?))
+}
+
+#[derive(Deserialize)]
+struct NewTableRequest {
+    data: Vec<NewTableData>,
+}
+#[derive(Deserialize)]
+struct NewTableData {
+    table: String,
+}
+
+#[post("/api/admin/sys/table")]
+async fn admin_sys_table_new(
+    web::Query(query): web::Query<JustApp>,
+    payload: web::Json<NewTableRequest>,
+    data: web::Data<AppState>,
+) -> actix_web::Result<web::Json<Value>, MyError> {
+    for table in payload.into_inner().data.into_iter() {
+        let sql = format!(
+            "CREATE TABLE {}.{} ()",
+            identifier(&query.app)?,
+            identifier(&table.table)?
+        );
+        data.client.query(&sql as &str, &[]).await?;
+    }
+    Ok(web::Json(Value::Object(Map::new())))
 }
 
 #[get("/api/{app}/view/{view}")]
@@ -225,6 +251,7 @@ async fn main() -> std::io::Result<()> {
             .service(admin_sys_app_del)
             .service(admin_sys_app_new)
             .service(admin_sys_view)
+            .service(admin_sys_table_new)
             .service(admin_migration_advance)
             .service(admin_migration_retract)
     })
