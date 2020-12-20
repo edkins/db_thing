@@ -16,7 +16,8 @@ impl<'a> FromSql<'a> for SqlJson {
             | Type::FLOAT8
             | Type::VARCHAR
             | Type::TEXT
-            | Type::NAME => true,
+            | Type::NAME
+            | Type::VARCHAR_ARRAY => true,
             _ => false,
         }
     }
@@ -31,6 +32,12 @@ impl<'a> FromSql<'a> for SqlJson {
             Type::VARCHAR | Type::TEXT | Type::NAME => {
                 Ok(SqlJson(Value::String(String::from_sql(ty, raw)?)))
             }
+            Type::VARCHAR_ARRAY => Ok(SqlJson(Value::Array(
+                Vec::<String>::from_sql(ty, raw)?
+                    .into_iter()
+                    .map(Value::String)
+                    .collect(),
+            ))),
             _ => panic!(),
         }
     }

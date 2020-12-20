@@ -126,10 +126,11 @@ async function create_table() {
 	const app = parse_hash().app;
 	const table = document.getElementById('new_tablename').value;
 	if (app !== undefined && table !== '') {
+		const view = `${table}0`;
 		const response = await fetch(`/api/admin/sys/table?app=${app}`, {
 			method: 'POST',
 			headers: {'Content-Type': 'application/json'},
-			body: JSON.stringify({data: [{table}]})
+			body: JSON.stringify({data: [{table, view}]})
 		});
 		if (response.ok) {
 			load();
@@ -172,15 +173,24 @@ async function populate_app() {
 		let table = undefined;
 		let t = undefined;
 		for (let row of d.data) {
-			if (row.table !== table) {
+			const table_list = row.tables.join(',');
+			if (table_list !== table) {
 				if (t !== undefined) {
 					tables.appendChild(t);
 				}
 				t = document.createElement('table');
 				t.border = 1;
-				tables.appendChild(h2(row.table));
+				tables.appendChild(h2(table_list));
 			}
-			t.appendChild(tr([td(row.view)]))
+			const delbtn = document.createElement('button');
+			delbtn.textContent = 'del';
+			delbtn.onclick = async() => {
+				const response = await fetch(`/api/admin/sys/view?app=${app}&view=${row.view}`, {method:'DELETE'});
+				if (response.ok) {
+					load();
+				}
+			};
+			t.appendChild(tr([td(row.view),td_el(delbtn)]))
 		}
 		if (t !== undefined) {
 			tables.appendChild(t);

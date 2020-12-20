@@ -114,8 +114,7 @@ fn valid_table_name(name: &str) -> bool {
     if name.is_empty() {
         return false;
     }
-    if name.starts_with("_")
-    {
+    if name.starts_with("_") {
         return false;
     }
     for ch in name.chars() {
@@ -125,6 +124,10 @@ fn valid_table_name(name: &str) -> bool {
         }
     }
     true
+}
+
+fn valid_view_name(name: &str) -> bool {
+    valid_table_name(name)
 }
 
 #[post("/api/admin/sys/app")]
@@ -147,6 +150,32 @@ struct JustApp {
     app: String,
 }
 
+#[derive(Deserialize)]
+struct AppAndView {
+    app: String,
+    view: String,
+}
+
+#[delete("/api/admin/sys/view")]
+async fn admin_sys_view_del(
+    web::Query(query): web::Query<AppAndView>,
+    data: web::Data<AppState>,
+) -> actix_web::Result<HttpResponse, MyError> {
+    if !valid_app_name(&query.app) {
+        return Err(MyError::InvalidAppName);
+    }
+    if !valid_view_name(&query.view) {
+        return Err(MyError::InvalidViewName);
+    }
+    let sql = format!(
+        "DROP VIEW {}.{} RESTRICT",
+        identifier(&query.app)?,
+        identifier(&query.view)?
+    );
+    data.client.query(&sql as &str, &[]).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
 #[get("/api/admin/sys/view")]
 async fn admin_sys_view(
     web::Query(query): web::Query<JustApp>,
@@ -156,10 +185,16 @@ async fn admin_sys_view(
         .client
         .query(
             "
-SELECT table_schema AS app, table_name AS table, table_name AS view
+SELECT
+    information_schema.views.table_schema AS app,
+    information_schema.views.table_name AS view,
+    ARRAY_AGG(information_schema.view_table_usage.table_name :: VARCHAR) AS tables
 FROM information_schema.views
-WHERE table_schema = $1
-ORDER BY app ASC, view ASC
+LEFT OUTER JOIN information_schema.view_table_usage
+    ON information_schema.views.table_name = information_schema.view_table_usage.view_name
+WHERE information_schema.views.table_schema = $1
+GROUP BY information_schema.views.table_schema, information_schema.views.table_name
+ORDER BY app ASC, tables ASC, view ASC
 ",
             &[&query.app],
         )
@@ -174,6 +209,7 @@ struct NewTableRequest {
 #[derive(Deserialize)]
 struct NewTableData {
     table: String,
+    view: String,
 }
 
 #[post("/api/admin/sys/table")]
@@ -189,13 +225,26 @@ async fn admin_sys_table_new(
         if !valid_table_name(&table.table) {
             return Err(MyError::InvalidTableName);
         }
+        if !valid_view_name(&table.view) {
+            return Err(MyError::InvalidViewName);
+        }
         let sql = format!(
-            "CREATE TABLE {}.{} ()",
+            "CREATE TABLE {}.{} (name VARCHAR)",
+            identifier(&query.app)?,
+            identifier(&table.table)?
+        );
+        data.client.query(&sql as &str, &[]).await?;
+
+        let sql = format!(
+            "CREATE VIEW {}.{} AS SELECT name FROM {}.{}", // initially zero columns are returned
+            identifier(&query.app)?,
+            identifier(&table.view)?,
             identifier(&query.app)?,
             identifier(&table.table)?
         );
         data.client.query(&sql as &str, &[]).await?;
     }
+
     Ok(web::Json(Value::Object(Map::new())))
 }
 
@@ -216,7 +265,11 @@ async fn admin_sys_table_del(
     if !valid_table_name(&query.table) {
         return Err(MyError::InvalidTableName);
     }
-    let sql = format!("DROP TABLE {}.{} RESTRICT", identifier(&query.app)?, identifier(&query.table)?);
+    let sql = format!(
+        "DROP TABLE {}.{} RESTRICT",
+        identifier(&query.app)?,
+        identifier(&query.table)?
+    );
     data.client.query(&sql as &str, &[]).await?;
     Ok(HttpResponse::NoContent().finish())
 }
@@ -246,7 +299,6 @@ ORDER BY app ASC, \"table\" ASC
         .await?;
     Ok(web::Json(rows_to_json(&rows)?))
 }
-
 
 #[get("/api/{app}/view/{view}")]
 async fn get_view(
@@ -318,6 +370,7 @@ async fn main() -> std::io::Result<()> {
             .service(admin_sys_app_del)
             .service(admin_sys_app_new)
             .service(admin_sys_view)
+            .service(admin_sys_view_del)
             .service(admin_sys_table)
             .service(admin_sys_table_del)
             .service(admin_sys_table_new)
