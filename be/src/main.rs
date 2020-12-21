@@ -45,7 +45,7 @@ fn row_to_json(row: &Row) -> Result<Value, MyError> {
 }
 
 fn rows_to_json(rows: &[Row]) -> Result<Value, MyError> {
-    let jsons: Result<Vec<_>, MyError> = rows.into_iter().map(row_to_json).collect();
+    let jsons: Result<Vec<_>, MyError> = rows.iter().map(row_to_json).collect();
     let mut result = Map::new();
     result.insert("data".to_owned(), Value::Array(jsons?));
     Ok(Value::Object(result))
@@ -94,7 +94,7 @@ fn valid_app_name(name: &str) -> bool {
         return false;
     }
     if name.starts_with("pg_")
-        || name.starts_with("_")
+        || name.starts_with('_')
         || name == "information_schema"
         || name == "public"
         || name == "admin"
@@ -114,7 +114,7 @@ fn valid_table_name(name: &str) -> bool {
     if name.is_empty() {
         return false;
     }
-    if name.starts_with("_") {
+    if name.starts_with('_') {
         return false;
     }
     for ch in name.chars() {

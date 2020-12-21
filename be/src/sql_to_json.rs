@@ -13,20 +13,20 @@ fn opt_to_string(o: Option<String>) -> Value {
 
 impl<'a> FromSql<'a> for SqlJson {
     fn accepts(ty: &Type) -> bool {
-        match *ty {
+        matches!(
+            *ty,
             Type::BOOL
-            | Type::CHAR
-            | Type::INT2
-            | Type::INT4
-            | Type::INT8
-            | Type::FLOAT4
-            | Type::FLOAT8
-            | Type::VARCHAR
-            | Type::TEXT
-            | Type::NAME
-            | Type::VARCHAR_ARRAY => true,
-            _ => false,
-        }
+                | Type::CHAR
+                | Type::INT2
+                | Type::INT4
+                | Type::INT8
+                | Type::FLOAT4
+                | Type::FLOAT8
+                | Type::VARCHAR
+                | Type::TEXT
+                | Type::NAME
+                | Type::VARCHAR_ARRAY
+        )
     }
 
     fn from_sql(ty: &Type, raw: &'a [u8]) -> Result<Self, Box<dyn Error + 'static + Sync + Send>> {
