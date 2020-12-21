@@ -298,27 +298,58 @@ struct NewViewRequest {
 #[derive(Deserialize)]
 struct NewViewData {
     view: String,
+    prev: Option<String>,
 }
 
 #[post("/api/admin/sys/view")]
 async fn admin_sys_view_new(
     web::Query(query): web::Query<JustApp>,
-    payload: web::Json<NewViewRequest>,
+    web::Json(payload): web::Json<NewViewRequest>,
     data: web::Data<AppState>,
 ) -> actix_web::Result<web::Json<Empty>, MyError> {
     if !valid_app_name(&query.app) {
         return Err(MyError::InvalidAppName);
     }
-    for view in payload.into_inner().data.into_iter() {
+    for view in payload.data.into_iter() {
         if !valid_view_name(&view.view) {
             return Err(MyError::InvalidViewName);
         }
-        let sql = format!(
-            "CREATE TABLE {}.{} ()",
-            identifier(&query.app)?,
-            identifier(&view.view)?
-        );
-        data.client.query(&sql as &str, &[]).await?;
+        if let Some(prev) = view.prev {
+            if !valid_view_name(&prev) {
+                return Err(MyError::InvalidViewName);
+            }
+
+            // Try creating the view first because this may fail
+            let sql = format!(
+                "CREATE VIEW {}.\"_temp\" AS SELECT * FROM {}.{}",
+                identifier(&query.app)?,
+                identifier(&query.app)?,
+                identifier(&prev)?
+            );
+            data.client.query(&sql as &str, &[]).await?;
+
+            let sql = format!(
+                "ALTER TABLE {}.{} RENAME TO {}",
+                identifier(&query.app)?,
+                identifier(&prev)?,
+                identifier(&view.view)?
+            );
+            data.client.query(&sql as &str, &[]).await?;
+
+            let sql = format!(
+                "ALTER VIEW {}.\"_temp\" RENAME TO {}",
+                identifier(&query.app)?,
+                identifier(&prev)?
+            );
+            data.client.query(&sql as &str, &[]).await?;
+        } else {
+            let sql = format!(
+                "CREATE TABLE {}.{} ()",
+                identifier(&query.app)?,
+                identifier(&view.view)?
+            );
+            data.client.query(&sql as &str, &[]).await?;
+        }
     }
 
     Ok(web::Json(Empty {}))

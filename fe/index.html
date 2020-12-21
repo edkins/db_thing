@@ -171,6 +171,15 @@ async function create_app() {
 	}
 }
 
+function advance_version(viewname) {
+	let m = viewname.match(/(.*?)([0-9]+)/);
+	if (m) {
+		return `${m[1]}${parseInt(m[2])+1}`;
+	} else {
+		return `${viewname}0`;
+	}
+}
+
 async function populate_app() {
 	const app_div = document.getElementById('app_div');
 	const app_crumb = document.getElementById('app_crumb');
@@ -295,6 +304,24 @@ async function populate_app() {
 			adddiv.appendChild(new Text('Type:'));
 			adddiv.appendChild(addsel);
 			tables.appendChild(adddiv);
+
+			const verbtn = document.createElement('button');
+			verbtn.textContent = 'Create new view version';
+			verbtn.onclick = async() => {
+				const vername = advance_version(table_view);
+				let response = await fetch(`/api/admin/sys/view?app=${app}`,
+					{
+						method: 'POST',
+						headers: {'Content-Type':'application/json'},
+						body: JSON.stringify({data:[{prev:table_view, view:vername}]})
+					});
+				if (response.ok) {
+					load();
+				}
+			};
+			const verdiv = document.createElement('div');
+			verdiv.appendChild(verbtn);
+			tables.appendChild(verdiv);
 		}
 	}
 }
