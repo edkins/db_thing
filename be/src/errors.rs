@@ -4,7 +4,7 @@ use derive_more::{Display, Error};
 #[derive(Debug, Display, Error)]
 pub enum MyError {
     InvalidAppName,
-    InvalidTableName,
+    InvalidColumnName,
     InvalidType,
     InvalidViewName,
     NullInSqlToken,

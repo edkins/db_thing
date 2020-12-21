@@ -143,15 +143,17 @@ async function populate_new() {
 
 async function create_table() {
 	const app = parse_hash().app;
-	const table = document.getElementById('new_tablename').value;
+	const new_tablename = document.getElementById('new_tablename');
+	const table = new_tablename.value;
 	if (app !== undefined && table !== '') {
 		const view = `${table}0`;
-		const response = await fetch(`/api/admin/sys/table?app=${app}`, {
+		const response = await fetch(`/api/admin/sys/view?app=${app}`, {
 			method: 'POST',
 			headers: {'Content-Type': 'application/json'},
-			body: JSON.stringify({data: [{table:view, view}]})   // for now, the table IS the view so the names must be the same
+			body: JSON.stringify({data: [{view}]})
 		});
 		if (response.ok) {
+			new_tablename.value = '';
 			load();
 		}
 	}
@@ -184,22 +186,16 @@ async function populate_app() {
 
 	const tables = document.getElementById('tables');
 	const response = await fetch(`/api/admin/sys/view?app=${app}`);
-	const response2 = await fetch(`/api/admin/sys/table?app=${app}`);
 	empty(tables);
-	if (response.ok && response2.ok) {
+	if (response.ok) {
 		const d = await response.json();
-		const d2 = await response2.json();
 		const all_tables = [];
 		const table_info = {};
-		for (let row of d2.data) {
-			all_tables.push(row.table);
-			table_info[row.table] = {view_count: row.view_count, columns: []};
-		}
 		for (let row of d.data) {
 			row.table_list = row.tables.join(',');
 			if (all_tables.indexOf(row.table_list) === -1) {
 				all_tables.push(row.table_list);
-				table_info[row.table] = {view_count: '?', columns: []};
+				table_info[row.table_list] = {columns: []};
 			}
 			for (let column of row.columns) {
 				if (table_info[row.table_list].columns.indexOf(column) === -1) {
@@ -208,7 +204,7 @@ async function populate_app() {
 			}
 		}
 		for (let table_list of all_tables) {
-			tables.appendChild(h2(`${table_list}: ${table_info[table_list].view_count} views`));
+			tables.appendChild(h2(table_list));
 
 			const t = document.createElement('table');
 			t.border = 1;

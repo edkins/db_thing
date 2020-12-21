@@ -110,7 +110,7 @@ fn valid_app_name(name: &str) -> bool {
     true
 }
 
-fn valid_table_name(name: &str) -> bool {
+fn valid_view_name(name: &str) -> bool {
     if name.is_empty() {
         return false;
     }
@@ -126,8 +126,8 @@ fn valid_table_name(name: &str) -> bool {
     true
 }
 
-fn valid_view_name(name: &str) -> bool {
-    valid_table_name(name)
+fn valid_column_name(name: &str) -> bool {
+    valid_view_name(name)
 }
 
 #[derive(Serialize)]
@@ -277,6 +277,9 @@ async fn admin_sys_view_patch(
     data: web::Data<AppState>,
 ) -> actix_web::Result<web::Json<Empty>, MyError> {
     for add_column in payload.patch.add_columns.into_iter() {
+        if !valid_column_name(&add_column.column) {
+            return Err(MyError::InvalidColumnName);
+        }
         let sql = format!(
             "ALTER TABLE {}.{} ADD {} {}",
             identifier(&query.app)?,
@@ -290,95 +293,36 @@ async fn admin_sys_view_patch(
 }
 
 #[derive(Deserialize)]
-struct NewTableRequest {
-    data: Vec<NewTableData>,
+struct NewViewRequest {
+    data: Vec<NewViewData>,
 }
 #[derive(Deserialize)]
-struct NewTableData {
-    table: String,
+struct NewViewData {
     view: String,
 }
 
-#[post("/api/admin/sys/table")]
-async fn admin_sys_table_new(
+#[post("/api/admin/sys/view")]
+async fn admin_sys_view_new(
     web::Query(query): web::Query<JustApp>,
-    payload: web::Json<NewTableRequest>,
+    payload: web::Json<NewViewRequest>,
     data: web::Data<AppState>,
 ) -> actix_web::Result<web::Json<Empty>, MyError> {
     if !valid_app_name(&query.app) {
         return Err(MyError::InvalidAppName);
     }
-    for table in payload.into_inner().data.into_iter() {
-        if !valid_table_name(&table.table) {
-            return Err(MyError::InvalidTableName);
-        }
-        if !valid_view_name(&table.view) {
+    for view in payload.into_inner().data.into_iter() {
+        if !valid_view_name(&view.view) {
             return Err(MyError::InvalidViewName);
-        }
-        if table.table != table.view {
-            return Err(MyError::InvalidTableName); // for now, the table IS the view, so they must have the same name
         }
         let sql = format!(
             "CREATE TABLE {}.{} ()",
             identifier(&query.app)?,
-            identifier(&table.table)?
+            identifier(&view.view)?
         );
         data.client.query(&sql as &str, &[]).await?;
     }
 
     Ok(web::Json(Empty {}))
-}
-
-#[derive(Deserialize)]
-struct AppAndTable {
-    app: String,
-    table: String,
-}
-
-#[delete("/api/admin/sys/table")]
-async fn admin_sys_table_del(
-    web::Query(query): web::Query<AppAndTable>,
-    data: web::Data<AppState>,
-) -> actix_web::Result<HttpResponse, MyError> {
-    if !valid_app_name(&query.app) {
-        return Err(MyError::InvalidAppName);
-    }
-    if !valid_table_name(&query.table) {
-        return Err(MyError::InvalidTableName);
-    }
-    let sql = format!(
-        "DROP TABLE {}.{} RESTRICT",
-        identifier(&query.app)?,
-        identifier(&query.table)?
-    );
-    data.client.query(&sql as &str, &[]).await?;
-    Ok(HttpResponse::NoContent().finish())
-}
-
-#[get("/api/admin/sys/table")]
-async fn admin_sys_table(
-    web::Query(query): web::Query<JustApp>,
-    data: web::Data<AppState>,
-) -> actix_web::Result<web::Json<Value>, MyError> {
-    if !valid_app_name(&query.app) {
-        return Err(MyError::InvalidAppName);
-    }
-    let rows = data
-        .client
-        .query(
-            "
-SELECT information_schema.tables.table_schema AS app, information_schema.tables.table_name AS \"table\", COUNT(view_table_usage.view_name) AS view_count
-FROM information_schema.tables
-LEFT OUTER JOIN information_schema.view_table_usage ON information_schema.view_table_usage.table_name = information_schema.tables.table_name
-WHERE information_schema.tables.table_type = 'BASE TABLE'
-AND information_schema.tables.table_schema = $1
-GROUP BY information_schema.tables.table_schema, information_schema.tables.table_name
-ORDER BY app ASC, \"table\" ASC
-",
-            &[&query.app],
-        )
-        .await?;
-    Ok(web::Json(rows_to_json(&rows)?))
 }
 
 #[get("/api/{app}/view/{view}")]
@@ -452,10 +396,8 @@ async fn main() -> std::io::Result<()> {
             .service(admin_sys_app_new)
             .service(admin_sys_view)
             .service(admin_sys_view_del)
+            .service(admin_sys_view_new)
             .service(admin_sys_view_patch)
-            .service(admin_sys_table)
-            .service(admin_sys_table_del)
-            .service(admin_sys_table_new)
             .service(admin_migration_advance)
             .service(admin_migration_retract)
     })
