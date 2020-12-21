@@ -4,6 +4,13 @@ use tokio_postgres::types::{FromSql, Type};
 
 pub struct SqlJson(pub Value);
 
+fn opt_to_string(o: Option<String>) -> Value {
+    match o {
+        None => Value::Null,
+        Some(s) => Value::String(s),
+    }
+}
+
 impl<'a> FromSql<'a> for SqlJson {
     fn accepts(ty: &Type) -> bool {
         match *ty {
@@ -33,9 +40,9 @@ impl<'a> FromSql<'a> for SqlJson {
                 Ok(SqlJson(Value::String(String::from_sql(ty, raw)?)))
             }
             Type::VARCHAR_ARRAY => Ok(SqlJson(Value::Array(
-                Vec::<String>::from_sql(ty, raw)?
+                Vec::<Option<String>>::from_sql(ty, raw)?
                     .into_iter()
-                    .map(Value::String)
+                    .map(opt_to_string)
                     .collect(),
             ))),
             _ => panic!(),

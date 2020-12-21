@@ -5,6 +5,7 @@ use derive_more::{Display, Error};
 pub enum MyError {
     InvalidAppName,
     InvalidTableName,
+    InvalidType,
     InvalidViewName,
     NullInSqlToken,
     Postgres(tokio_postgres::error::Error),
