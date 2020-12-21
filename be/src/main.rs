@@ -10,7 +10,6 @@ use crate::errors::MyError;
 use crate::sql_to_json::SqlJson;
 
 mod errors;
-mod migration;
 mod sql_to_json;
 
 #[derive(Clone)]
@@ -356,20 +355,6 @@ async fn connect() -> std::io::Result<(Client, Connection<Socket, NoTlsStream>)>
     }
 }
 
-#[post("/api/admin/migration/advance")]
-async fn admin_migration_advance(
-    data: web::Data<AppState>,
-) -> actix_web::Result<web::Json<Value>, MyError> {
-    migration::advance(&*data.client).await
-}
-
-#[post("/api/admin/migration/retract")]
-async fn admin_migration_retract(
-    data: web::Data<AppState>,
-) -> actix_web::Result<web::Json<Value>, MyError> {
-    migration::retract(&*data.client).await
-}
-
 async fn do_connection(connection: Connection<Socket, NoTlsStream>) {
     let _ = connection.await;
 }
@@ -398,8 +383,6 @@ async fn main() -> std::io::Result<()> {
             .service(admin_sys_view_del)
             .service(admin_sys_view_new)
             .service(admin_sys_view_patch)
-            .service(admin_migration_advance)
-            .service(admin_migration_retract)
     })
     .bind("0.0.0.0:8080")?
     .run()
