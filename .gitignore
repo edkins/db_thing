@@ -1,3 +1,5 @@
 build-env/
 .*.swp
-client-secret
+dbthing.conf
+junk/
+db_thing

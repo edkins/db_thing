@@ -6,9 +6,11 @@ use serde_json::{map::Map, Value};
 use std::{io::ErrorKind, sync::Arc, time::Duration};
 use tokio_postgres::{tls::NoTlsStream, Client, Config, Connection, Row};
 
+use crate::conf::{DbThingConf,PostgresConf};
 use crate::errors::MyError;
 use crate::sql_to_json::SqlJson;
 
+mod conf;
 mod errors;
 mod sql_to_json;
 
@@ -365,12 +367,12 @@ async fn get_view(
     Ok(web::Json(rows_to_json(&rows)?))
 }
 
-async fn connect() -> std::io::Result<(Client, Connection<Socket, NoTlsStream>)> {
+async fn connect(conf: &PostgresConf) -> std::io::Result<(Client, Connection<Socket, NoTlsStream>)> {
     let max_duration = Duration::from_secs(30);
     let mut duration = Duration::from_millis(10);
     loop {
         let mut config = Config::new();
-        config.host("postgres").user("postgres");
+        config.host(&conf.host).user(&conf.user).password(&conf.password);
 
         match async_postgres::connect(config).await {
             Ok(x) => return Ok(x),
@@ -392,8 +394,10 @@ async fn do_connection(connection: Connection<Socket, NoTlsStream>) {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    println!("Loading configuration");
+    let conf = DbThingConf::load()?;
     println!("Connecting");
-    let (client, connection) = connect().await?;
+    let (client, connection) = connect(&conf.postgres).await?;
 
     println!("Spawning connection");
     actix::spawn(do_connection(connection));
@@ -415,7 +419,7 @@ async fn main() -> std::io::Result<()> {
             .service(admin_sys_view_new)
             .service(admin_sys_view_patch)
     })
-    .bind("0.0.0.0:8080")?
+    .bind("127.0.0.1:8080")?
     .run()
     .await
 }

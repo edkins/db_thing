@@ -1,0 +1,7 @@
+set -ex
+sudo ln -sf /opt/db_thing/dbthing.service /etc/systemd/system/dbthing.service
+sed s/{{HOSTNAME}}/$HOSTNAME/g /opt/db_thing/nginx-default.conf >/opt/db_thing/nginx-default.subst
+sudo ln -sf /opt/db_thing/nginx-default.subst /etc/nginx/sites-available/default
+sudo systemctl enable dbthing
+sudo systemctl restart nginx
+sudo systemctl restart dbthing

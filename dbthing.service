@@ -1,0 +1,11 @@
+[Unit]
+Description=DBThing database abstraction and user management layer
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/db_thing/db_thing /opt/db_thing/dbthing.conf
+WorkingDirectory=/opt/db_thing
+
+[Install]
+WantedBy=multi-user.target
